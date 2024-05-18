@@ -62,19 +62,19 @@ data %>%
 
 #mar_data$date <- strptime(as.character(mar_data$date), format = "%Y-%m-%d")
 # Tracer l'évolution des nouveaux cas en fonction de la date
-ggplot(mar_data, aes(x = date, y = new_cases_smoothed)) +
+ggplot(data_maroc, aes(x = date, y = new_cases_smoothed)) +
   geom_line() + 
   labs(x = "Date", y = "Nouveaux cas", title = "Évolution des nouveaux cas de COVID-19") +
   theme_minimal()
 
 
-ggplot(mar_data, aes(x = date, y = new_deaths)) +
+ggplot(data_maroc, aes(x = date, y = new_deaths)) +
   geom_line() + 
   labs(x = "Date", y = "Nouveaux decedes", title = "Évolution des nouveaux decedes de COVID-19") +
   theme_minimal()
 
 
-data_subset <- subset(mar_data, date >= "2021-01-29")
+data_subset <- subset(data_maroc, date >= "2021-01-29")
 
 ggplot(data_subset, aes(x = date, y = new_vaccinations_smoothed)) +
   geom_line() + 
@@ -98,3 +98,43 @@ summary(regression_model)
 
 # Réalisation de tests statistiques pour confirmer ou infirmer l'hypothèse nulle
 cor.test(mar_data$population_density, mar_data$new_cases, method = "pearson")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Calcul des statistiques descriptives pour les variables d'intérêt
+summary_stats <- data_maroc %>%
+  select(new_cases, new_deaths, new_vaccinations) %>%
+  summarise(
+    mean_new_cases = mean(new_cases, na.rm = TRUE),
+    median_new_cases = median(new_cases, na.rm = TRUE),
+    sd_new_cases = sd(new_cases, na.rm = TRUE),
+    min_new_cases = min(new_cases, na.rm = TRUE),
+    max_new_cases = max(new_cases, na.rm = TRUE),
+    
+    mean_new_deaths = mean(new_deaths, na.rm = TRUE),
+    median_new_deaths = median(new_deaths, na.rm = TRUE),
+    sd_new_deaths = sd(new_deaths, na.rm = TRUE),
+    min_new_deaths = min(new_deaths, na.rm = TRUE),
+    max_new_deaths = max(new_deaths, na.rm = TRUE),
+    
+    mean_new_vaccinations = mean(new_vaccinations, na.rm = TRUE),
+    median_new_vaccinations = median(new_vaccinations, na.rm = TRUE),
+    sd_new_vaccinations = sd(new_vaccinations, na.rm = TRUE),
+    min_new_vaccinations = min(new_vaccinations, na.rm = TRUE),
+    max_new_vaccinations = max(new_vaccinations, na.rm = TRUE)
+  )
+
+# Afficher les statistiques descriptives
+print(summary_stats)
+
