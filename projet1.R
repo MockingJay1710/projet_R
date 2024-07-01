@@ -4,137 +4,203 @@ library(magrittr)
 library(dplyr)
 library(ggplot2)
 library(tidyr)
+library(reshape2)
 
+
+#lecture des donnees
 data <- read.csv("owid-covid-data.csv",sep=',')
 
+#verification des attributs de la table `data`
+names(data)
 
-#on veut analyser juste des donnees concernant le Maroc donc on cree une sous-table 
+#conversion de la date en type Date
+data$date<-as.Date(data$date)
+class(data$date)
+
+# Création de la colonne 'total_recovered'
+data$total_recovered <- data$total_cases - data$total_deaths
+
+# Création de la colonne 'new_recovered'
+data$new_recovered <- data$new_cases - data$new_deaths
+
+
+#creation d'une nouvelle table ne contenant que les donnees du Maroc
 data_maroc <- data[data$location=="Morocco",]
 
-
-
-
-variables_to_include <- c("new_cases", "new_deaths","new_vaccinations","hosp_patients","icu_patients")
-
-# Grouper les données par "location" et calculer les statistiques descriptives pour les variables spécifiques
-summary_table <- data %>%
-  group_by(location) %>%
-  summarise_at(vars(variables_to_include), list(min = min, max = max, mean = mean, median = median),na.rm="True")
-
-# Afficher le tableau résultant
-print(summary_table)
-
-write.csv(summary_table, "SUMMARY.csv", row.names = FALSE)
+# Remplacer les valeurs NA restantes par 0
+data_maroc[is.na(data_maroc)] <- 0
 
 
 
 
-s<-as.data.frame(summary(data_maroc))
-s %>%
-  pivot_longer(names_from = "" )
-  
-
-data %>%
-  filter(location %in% c("Morocco","France","Spain","Italy")) %>%
-  group_by(location,date) %>%
-  ggplot()+
-  geom_point(aes(x=date,y=new_deaths,col=`location`))
-
-
-
-
-# Convertir la colonne de la date en format Date
-data_maroc$date <- as.Date(data_maroc$date)
-
+#tendances
+##cas confirmes
+summary(data_maroc$new_cases_smoothed)
+boxplot(data_maroc$new_cases_smoothed,main="Nouveaux cas",horizontal = T)
 data_maroc %>%
   ggplot()+
-  geom_point(aes(x=date,y=new_deaths))
+  geom_point(aes(x=date,y=new_cases_smoothed,col="red"))+
+  labs(x="Date",y="Nouveaux cas",title = "Nouveaux cas confirmes (moyennes sur 7jrs)")+
+  theme_bw()
 
-data$date <- as.Date(data$date)
-
-data %>%
-  filter(location %in% c("Morocco","France","Spain","Italy")) %>%
-  group_by(location,date) %>%
+##les decedes
+summary(data_maroc$new_deaths_smoothed)
+boxplot(data_maroc$new_deaths_smoothed,main="Nouveaux decedes",horizontal = T)
+data_maroc %>%
   ggplot()+
-  geom_point(aes(x=date,y=new_deaths,col=`location`))
-  
+  geom_point(aes(x=date,y=new_deaths_smoothed,col="red"))+
+  labs(x="Date",y="Nouveaux decedes",title = "Nouveaux decedes (moyennes sur 7jrs)")+
+  theme_bw()
+
+##estimation des guerisons
+
+summary(data_maroc$new_recovered)
+boxplot(data_maroc$new_recovered,main="Nouveaux gueris",horizontal = T)
+data_maroc %>%
+  ggplot()+
+  geom_point(aes(x=date,y=new_recovered,col="red"))+
+  labs(x="Date",y="Nouveaux gueris",title = "Nouveaux gueris (moyennes sur 7jrs)")+
+  theme_bw()
+
+# Filtrer les données pour supprimer les lignes où total_cases est NA ou égal à 0
+data_maroc <- data_maroc %>%
+  filter(!is.na(new_recovered) & new_recovered != 0)
 
 
-#mar_data$date <- strptime(as.character(mar_data$date), format = "%Y-%m-%d")
-# Tracer l'évolution des nouveaux cas en fonction de la date
-ggplot(data_maroc, aes(x = date, y = new_cases_smoothed)) +
+
+
+
+
+
+
+###d'abord pour faire une comparaison on doit utiliser les variables _per_million pour de l'equite
+
+
+
+# Sélectionner les pays d'intérêt
+countries_of_interest <- c("Morocco", "New Zealand", "India", "Brazil")
+
+# Filtrer les données pour les pays d'intérêt et les dates pertinentes
+data_filtered <- data %>%
+  filter(location %in% countries_of_interest & date >= "2020-01-01" & date <= "2024-01-01")
+
+# Remplacer les valeurs manquantes par des zéros pour les variables d'intérêt
+data_filtered <- data_filtered %>% 
+  mutate(new_cases_smoothed_per_million = ifelse(is.na(new_cases_smoothed_per_million), 0, new_cases_smoothed_per_million),
+         new_deaths_smoothed_per_million = ifelse(is.na(new_deaths_smoothed_per_million), 0, new_deaths_smoothed_per_million),
+         new_tests_smoothed_per_thousand = ifelse(is.na(new_tests_smoothed_per_thousand), 0, new_tests_smoothed_per_thousand),
+         new_vaccinations_smoothed_per_million = ifelse(is.na(new_vaccinations_smoothed_per_million), 0, new_vaccinations_smoothed_per_million))
+
+# Comparaison des nouveaux cas confirmés
+ggplot(data_filtered, aes(x = date, y = new_cases_smoothed_per_million, color = location)) +
   geom_line() + 
-  labs(x = "Date", y = "Nouveaux cas", title = "Évolution des nouveaux cas de COVID-19") +
+  labs(x = "Date", y = "Nouveaux cas confirmés (moyenne 7j)", title = "Comparaison des nouveaux cas confirmés entre pays") +
+  theme_minimal()
+
+# Comparaison des nouveaux décès
+ggplot(data_filtered, aes(x = date, y = new_deaths_smoothed_per_million, color = location)) +
+  geom_line() + 
+  labs(x = "Date", y = "Nouveaux décès (moyenne 7j)", title = "Comparaison des nouveaux décès entre pays") +
+  theme_minimal()
+
+# Comparaison des tests réalisés
+ggplot(data_filtered, aes(x = date, y = new_tests_smoothed_per_thousand, color = location)) +
+  geom_line() + 
+  labs(x = "Date", y = "Tests réalisés (moyenne 7j)", title = "Comparaison des tests réalisés entre pays") +
+  theme_minimal()
+
+# Comparaison des vaccinations
+ggplot(data_filtered, aes(x = date, y = new_vaccinations_smoothed_per_million, color = location)) +
+  geom_line() + 
+  labs(x = "Date", y = "Vaccinations (moyenne 7j)", title = "Comparaison des vaccinations entre pays") +
+  theme_minimal()
+
+# Comparaison des guerisons
+ggplot(data_filtered, aes(x = date, y = new_recovered, color = location)) +
+  geom_line() + 
+  labs(x = "Date", y = "Guerisons (moyenne 7j)", title = "Comparaison des guerisons entre pays") +
   theme_minimal()
 
 
-ggplot(data_maroc, aes(x = date, y = new_deaths)) +
-  geom_line() + 
-  labs(x = "Date", y = "Nouveaux decedes", title = "Évolution des nouveaux decedes de COVID-19") +
+
+
+
+
+
+
+
+##correlation
+# Filtrer les données pour supprimer les lignes où les valeurs sont NA
+donnees_filtrees <- data_maroc %>%
+  filter(!is.na(total_cases) & total_cases != 0)
+
+# Remplacer les valeurs NA par 0
+donnees_filtrees[is.na(donnees_filtrees)] <- 0
+
+# Sélectionner les colonnes pertinentes pour l'analyse de corrélation
+variables <- donnees_filtrees %>%
+  select(new_cases, new_deaths, new_tests, total_cases, total_deaths, total_tests, new_recovered, total_recovered)
+
+# Calculer la matrice de corrélation
+correlation_matrix <- cor(variables)
+
+# Afficher la matrice de corrélation
+print(correlation_matrix)
+
+
+# Convertir la matrice de corrélation en un data.frame long
+correlation_matrix_long <- melt(correlation_matrix)
+
+# Plotter la heatmap
+ggplot(data = correlation_matrix_long, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0, limit = c(-1, 1), space = "Lab", name="Corrélation") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 12, hjust = 1)) +
+  coord_fixed() +
+  labs(title = "Matrice de corrélation entre les variables")
+
+
+
+
+##regression lineaire
+
+# Création de données d'exemple
+
+
+# Régression linéaire: Total des Cas vs Total des Décès
+model_total_cases_total_deaths <- lm(total_deaths ~ total_cases, data = donnees_filtrees)
+ggplot(donnees_filtrees, aes(x = total_cases, y = total_deaths)) +
+  geom_point(color = 'blue') +
+  geom_smooth(method = "lm", col = "red") +
+  labs(title = "Total des Cas vs Total des Décès",
+       x = "Total des Cas",
+       y = "Total des Décès") +
+  theme_minimal()
+
+# Régression linéaire: Total Cas vs Total Guéris
+model_new_cases_new_recovered <- lm(total_recovered ~ total_cases, data = donnees_filtrees)
+ggplot(donnees_filtrees, aes(x = total_cases, y = total_recovered)) +
+  geom_point(color = 'blue') +
+  geom_smooth(method = "lm", col = "red") +
+  labs(title = "Total Cas vs Total Guéris",
+       x = "Total Cas",
+       y = "Total Guéris") +
   theme_minimal()
 
 
-data_subset <- subset(data_maroc, date >= "2021-01-29")
 
-ggplot(data_subset, aes(x = date, y = new_vaccinations_smoothed)) +
-  geom_line() + 
-  labs(x = "Date", y = "Nouveaux decedes", title = "Évolution des nouveaux decedes de COVID-19") +
+#hypothese nulle et infirmation
+## pas de correlation entre new_cases et new_deaths
+cor.test(data_maroc$new_cases, data_maroc$new_deaths, method = "pearson")
+
+
+# Régression linéaire: Total Cas vs Total Guéris
+model_new_cases_new_recovered <- lm(new_cases ~ new_recovered, data = donnees_filtrees)
+ggplot(donnees_filtrees, aes(x = new_cases, y = new_recovered)) +
+  geom_point(color = 'blue') +
+  geom_smooth(method = "lm", col = "red") +
+  labs(title = "nouveaux Cas vs nouveaux gueris",
+       x = "nouveaux Cas",
+       y = "nouveaux gueris") +
   theme_minimal()
-
-summary(mar_data$new_people_vaccinated_smoothed)
-
-ggplot()+geom_line(data=mar_data,aes(x=date,y=new_cases_smoothed,color="red"))+geom_line(data=mar_data,aes(x=date,y=new_vaccinations_smoothed,color="blue"))
-+scale_y_contiuous(limits=c(0,10000))
-
-
-# Calcul du coefficient de corrélation linéaire entre les variables 
-correlation <- cor(mar_data$total_cases, mar_data$new_cases, use = "complete.obs")
-print(correlation)
-
-# Réalisation de régressions linéaires pour analyser les tendances
-regression_model <- lm(total_cases ~ date, data = mar_data)
-summary(regression_model)
-
-
-# Réalisation de tests statistiques pour confirmer ou infirmer l'hypothèse nulle
-cor.test(mar_data$population_density, mar_data$new_cases, method = "pearson")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Calcul des statistiques descriptives pour les variables d'intérêt
-summary_stats <- data_maroc %>%
-  select(new_cases, new_deaths, new_vaccinations) %>%
-  summarise(
-    mean_new_cases = mean(new_cases, na.rm = TRUE),
-    median_new_cases = median(new_cases, na.rm = TRUE),
-    sd_new_cases = sd(new_cases, na.rm = TRUE),
-    min_new_cases = min(new_cases, na.rm = TRUE),
-    max_new_cases = max(new_cases, na.rm = TRUE),
-    
-    mean_new_deaths = mean(new_deaths, na.rm = TRUE),
-    median_new_deaths = median(new_deaths, na.rm = TRUE),
-    sd_new_deaths = sd(new_deaths, na.rm = TRUE),
-    min_new_deaths = min(new_deaths, na.rm = TRUE),
-    max_new_deaths = max(new_deaths, na.rm = TRUE),
-    
-    mean_new_vaccinations = mean(new_vaccinations, na.rm = TRUE),
-    median_new_vaccinations = median(new_vaccinations, na.rm = TRUE),
-    sd_new_vaccinations = sd(new_vaccinations, na.rm = TRUE),
-    min_new_vaccinations = min(new_vaccinations, na.rm = TRUE),
-    max_new_vaccinations = max(new_vaccinations, na.rm = TRUE)
-  )
-
-# Afficher les statistiques descriptives
-print(summary_stats)
-
